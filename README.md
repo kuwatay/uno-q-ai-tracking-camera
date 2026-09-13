@@ -189,11 +189,6 @@ uno-q-ai-tracking-camera/
 │           ├── sketch.ino
 │           └── sketch.yaml
 │
-├── docs/
-│   ├── DEVELOPMENT_LOG.md
-│   ├── HARDWARE.md
-│   └── SOFTWARE.md
-│
 └── images/
     ├── prototype.jpg
     ├── webui-screenshot.png
@@ -353,22 +348,6 @@ examples/servotest/
 ```
 
 This was used before integrating face tracking, allowing the servo hardware, pulse ranges, and UNO Q PWM operation to be verified independently.
-
----
-
-## Development Notes
-
-Detailed development notes are stored under:
-
-```text
-docs/
-```
-
-Suggested files:
-
-- `DEVELOPMENT_LOG.md` — development history and test results
-- `HARDWARE.md` — hardware, wiring, power supply, and camera details
-- `SOFTWARE.md` — software architecture and application structure
 
 ---
 

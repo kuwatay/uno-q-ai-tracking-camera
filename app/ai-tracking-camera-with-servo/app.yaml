@@ -1,0 +1,8 @@
+name: AI Tracking Camera with Servo
+description: Object Detection
+ports: []
+bricks:
+- arduino:video_object_detection:
+    model: face-detection
+- arduino:web_ui: {}
+icon: 🔍

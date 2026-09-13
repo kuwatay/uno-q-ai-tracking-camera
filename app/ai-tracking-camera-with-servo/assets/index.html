@@ -1,0 +1,646 @@
+<!doctype html>
+<html lang="ja">
+
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>UNO Q Face Tracker</title>
+
+<style>
+    body {
+        margin: 0;
+        padding: 20px;
+        background: #202020;
+        color: white;
+        font-family: sans-serif;
+        text-align: center;
+    }
+
+    h1 {
+        margin-top: 0;
+        margin-bottom: 18px;
+        font-size: 28px;
+    }
+
+    .camera-container {
+        position: relative;
+        display: inline-block;
+        width: 640px;
+        max-width: 95vw;
+    }
+
+    #camera {
+        display: block;
+        width: 100%;
+        height: auto;
+        border: 2px solid #888;
+    }
+
+    #overlay {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+    }
+
+    .controls {
+        margin-top: 16px;
+        margin-bottom: 12px;
+    }
+
+    button {
+        min-width: 160px;
+        margin: 5px;
+        padding: 10px 20px;
+
+        border: 1px solid #888;
+        border-radius: 7px;
+
+        font-size: 18px;
+        cursor: pointer;
+    }
+
+    #trackingButton.on {
+        background: #2e7d32;
+        color: white;
+    }
+
+    #trackingButton.off {
+        background: #8b3030;
+        color: white;
+    }
+
+    #centerButton {
+        background: #505050;
+        color: white;
+    }
+
+    button:hover {
+        filter: brightness(1.15);
+    }
+
+    #info {
+        margin-top: 10px;
+
+        font-family: monospace;
+        font-size: 18px;
+
+        line-height: 1.6;
+    }
+
+    #connection {
+        margin-top: 6px;
+
+        font-family: monospace;
+        font-size: 14px;
+        color: #aaa;
+    }
+</style>
+</head>
+
+
+<body>
+
+<h1>UNO Q Face Tracker</h1>
+
+
+<!-- ======================================================
+     Camera + overlay
+     ====================================================== -->
+
+<div class="camera-container">
+
+    <img
+        id="camera"
+        src="/camera"
+        width="640"
+        height="480"
+        alt="Camera">
+
+    <canvas
+        id="overlay"
+        width="640"
+        height="480">
+    </canvas>
+
+</div>
+
+
+<!-- ======================================================
+     Controls
+     ====================================================== -->
+
+<div class="controls">
+
+    <button
+        id="trackingButton"
+        class="on"
+        type="button">
+        Tracking: ON
+    </button>
+
+    <button
+        id="centerButton"
+        type="button">
+        Center
+    </button>
+
+</div>
+
+
+<!-- ======================================================
+     Status
+     ====================================================== -->
+
+<div id="info">
+    Waiting for tracking data...
+</div>
+
+<div id="connection">
+    Connecting...
+</div>
+
+
+<script>
+
+/* =========================================================
+   Constants
+   ========================================================= */
+
+const WIDTH  = 640;
+const HEIGHT = 480;
+
+
+/* =========================================================
+   DOM objects
+   ========================================================= */
+
+const canvas = document.getElementById("overlay");
+const ctx = canvas.getContext("2d");
+
+const info = document.getElementById("info");
+const connection = document.getElementById("connection");
+
+const trackingButton =
+    document.getElementById("trackingButton");
+
+const centerButton =
+    document.getElementById("centerButton");
+
+
+/* =========================================================
+   Runtime state
+   ========================================================= */
+
+let lastGoodUpdate = 0;
+
+
+/* =========================================================
+   Tracking button
+   ========================================================= */
+
+function updateTrackingButton(enabled)
+{
+    if (enabled) {
+
+        trackingButton.textContent = "Tracking: ON";
+        trackingButton.className = "on";
+
+    } else {
+
+        trackingButton.textContent = "Tracking: OFF";
+        trackingButton.className = "off";
+    }
+}
+
+
+/* =========================================================
+   Draw basic overlay
+   ========================================================= */
+
+function drawBase(data)
+{
+    ctx.clearRect(0, 0, WIDTH, HEIGHT);
+
+    const centerX = data.center_x;
+    const centerY = data.center_y;
+
+    const deadX = data.dead_x;
+    const deadY = data.dead_y;
+
+
+    /* -----------------------------------------------------
+       Dead zone
+       ----------------------------------------------------- */
+
+    ctx.strokeStyle = "yellow";
+    ctx.lineWidth = 2;
+
+    ctx.strokeRect(
+        centerX - deadX,
+        centerY - deadY,
+        deadX * 2,
+        deadY * 2
+    );
+
+
+    /* -----------------------------------------------------
+       Screen center cross
+       ----------------------------------------------------- */
+
+    const cross = 12;
+
+    ctx.beginPath();
+
+    ctx.moveTo(
+        centerX - cross,
+        centerY
+    );
+
+    ctx.lineTo(
+        centerX + cross,
+        centerY
+    );
+
+    ctx.moveTo(
+        centerX,
+        centerY - cross
+    );
+
+    ctx.lineTo(
+        centerX,
+        centerY + cross
+    );
+
+    ctx.strokeStyle = "yellow";
+    ctx.lineWidth = 2;
+
+    ctx.stroke();
+}
+
+
+/* =========================================================
+   Draw tracking information
+   ========================================================= */
+
+function drawTracking(data)
+{
+    drawBase(data);
+
+    updateTrackingButton(
+        Boolean(data.tracking_enabled)
+    );
+
+
+    /* -----------------------------------------------------
+       Display status
+       ----------------------------------------------------- */
+
+    let displayStatus;
+
+    if (!data.tracking_enabled) {
+
+        displayStatus = "TRACKING OFF";
+
+    } else {
+
+        displayStatus = data.status;
+    }
+
+
+    /* -----------------------------------------------------
+       No face
+       ----------------------------------------------------- */
+
+    if (!data.face) {
+
+        ctx.font = "18px monospace";
+        ctx.fillStyle = "white";
+
+        ctx.fillText(
+            displayStatus,
+            10,
+            25
+        );
+
+        info.textContent =
+            displayStatus +
+            "   PAN=" + data.pan_us + "us" +
+            "   TILT=" + data.tilt_us + "us";
+
+        return;
+    }
+
+
+    /* -----------------------------------------------------
+       Face bounding box
+       ----------------------------------------------------- */
+
+    ctx.strokeStyle = "lime";
+    ctx.lineWidth = 3;
+
+    ctx.strokeRect(
+        data.x0,
+        data.y0,
+        data.x1 - data.x0,
+        data.y1 - data.y0
+    );
+
+
+    /* -----------------------------------------------------
+       Face center
+       ----------------------------------------------------- */
+
+    ctx.beginPath();
+
+    ctx.arc(
+        data.face_x,
+        data.face_y,
+        6,
+        0,
+        Math.PI * 2
+    );
+
+    ctx.fillStyle = "red";
+    ctx.fill();
+
+
+    /* -----------------------------------------------------
+       Line from screen center to face center
+       ----------------------------------------------------- */
+
+    ctx.beginPath();
+
+    ctx.moveTo(
+        data.center_x,
+        data.center_y
+    );
+
+    ctx.lineTo(
+        data.face_x,
+        data.face_y
+    );
+
+    ctx.strokeStyle = "cyan";
+    ctx.lineWidth = 2;
+
+    ctx.stroke();
+
+
+    /* -----------------------------------------------------
+       Confidence
+       ----------------------------------------------------- */
+
+    const confidence =
+        Math.round(
+            Number(data.confidence) * 100
+        );
+
+
+    /* -----------------------------------------------------
+       Text over video
+       ----------------------------------------------------- */
+
+    ctx.font = "18px monospace";
+    ctx.fillStyle = "white";
+
+    ctx.fillText(
+        "dx=" + data.error_x +
+        "  dy=" + data.error_y,
+        10,
+        25
+    );
+
+    ctx.fillText(
+        displayStatus +
+        "  conf=" + confidence + "%",
+        10,
+        50
+    );
+
+    ctx.fillText(
+        "PAN=" + data.pan_us + "us" +
+        "  TILT=" + data.tilt_us + "us",
+        10,
+        75
+    );
+
+
+    /* -----------------------------------------------------
+       Text below video
+       ----------------------------------------------------- */
+
+    info.textContent =
+        displayStatus +
+        "   dx=" + data.error_x +
+        "   dy=" + data.error_y +
+        "   PAN=" + data.pan_us + "us" +
+        "   TILT=" + data.tilt_us + "us" +
+        "   confidence=" + confidence + "%";
+}
+
+
+/* =========================================================
+   Read tracking state
+   ========================================================= */
+
+async function updateTracking()
+{
+    try {
+
+        const response = await fetch(
+            "/tracking?t=" + Date.now(),
+            {
+                method: "GET",
+                cache: "no-store"
+            }
+        );
+
+        if (!response.ok) {
+            throw new Error(
+                "HTTP " + response.status
+            );
+        }
+
+        const data =
+            await response.json();
+
+        drawTracking(data);
+
+        lastGoodUpdate = Date.now();
+
+        connection.textContent =
+            "Connected";
+
+        connection.style.color =
+            "#8fdf8f";
+
+    } catch (error) {
+
+        console.error(
+            "Tracking data error:",
+            error
+        );
+
+        /*
+         * 一時的な通信失敗では
+         * 直前の正常な画面を消さない。
+         */
+
+        if (
+            lastGoodUpdate !== 0 &&
+            Date.now() - lastGoodUpdate > 3000
+        ) {
+
+            connection.textContent =
+                "Tracking data connection lost";
+
+            connection.style.color =
+                "#ff9090";
+        }
+    }
+}
+
+
+/* =========================================================
+   Tracking ON / OFF
+   ========================================================= */
+
+async function toggleTracking()
+{
+    trackingButton.disabled = true;
+
+    try {
+
+        const response = await fetch(
+            "/tracking/toggle",
+            {
+                method: "POST"
+            }
+        );
+
+        if (!response.ok) {
+            throw new Error(
+                "HTTP " + response.status
+            );
+        }
+
+        const data =
+            await response.json();
+
+        updateTrackingButton(
+            Boolean(data.tracking_enabled)
+        );
+
+        /*
+         * 状態表示をすぐ更新する
+         */
+        await updateTracking();
+
+    } catch (error) {
+
+        console.error(
+            "Tracking toggle failed:",
+            error
+        );
+
+    } finally {
+
+        trackingButton.disabled = false;
+    }
+}
+
+
+/* =========================================================
+   Center servos
+   ========================================================= */
+
+async function centerServos()
+{
+    centerButton.disabled = true;
+
+    try {
+
+        const response = await fetch(
+            "/center",
+            {
+                method: "POST"
+            }
+        );
+
+        if (!response.ok) {
+            throw new Error(
+                "HTTP " + response.status
+            );
+        }
+
+        const data =
+            await response.json();
+
+        console.log(
+            "Servo centered:",
+            data
+        );
+
+        /*
+         * Web表示をすぐ更新
+         */
+        await updateTracking();
+
+    } catch (error) {
+
+        console.error(
+            "Center failed:",
+            error
+        );
+
+    } finally {
+
+        centerButton.disabled = false;
+    }
+}
+
+
+/* =========================================================
+   Button events
+   ========================================================= */
+
+trackingButton.addEventListener(
+    "click",
+    toggleTracking
+);
+
+centerButton.addEventListener(
+    "click",
+    centerServos
+);
+
+
+/* =========================================================
+   Start polling
+   ========================================================= */
+
+/*
+ * 顔検出自体は約7～8 fpsなので、
+ * Web表示は約5 fpsで十分。
+ */
+
+setInterval(
+    updateTracking,
+    200
+);
+
+
+/*
+ * Initial read
+ */
+
+updateTracking();
+
+</script>
+
+</body>
+</html>
