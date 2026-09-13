@@ -1,8 +1,12 @@
-# UNO Q AI Tracking Camera
+# Arduino UNO Q AI Tracking Camera
 
 A face-tracking pan/tilt camera built with **Arduino UNO Q**.
 
 This project combines on-device face detection, a USB camera, and two RC servos to automatically keep a person near the center of the frame. A browser-based Web UI provides a live preview, tracking information, and basic controls.
+
+![UNO Q AI Tracking Camera Prototype](images/prototype.jpg)
+
+![Web User Interface](images/webui-screenshot.png)
 
 The current version is a working prototype. Support for using the camera directly with applications such as Microsoft Teams or Zoom is planned as a future extension.
 
