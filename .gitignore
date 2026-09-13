@@ -1,1 +1,13 @@
-.DS_Store__pycache__/*.pyc*.log*.tmp.vscode/.idea/
+# Arduino App Lab / build cache
+.cache/
+
+# Python
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
+
+# Temporary / log files
+*.log
+*.tmp
